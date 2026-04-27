@@ -11,6 +11,7 @@ interface SidebarProps {
   onSelectView:    (view: string) => void;
   onNewProject:    () => void;
   onAddModule:     () => void;
+  onLogout:        () => void;
 }
 
 const VIEWS = [
@@ -23,7 +24,7 @@ const VIEWS = [
 export function Sidebar({
   activeProjectId, projects,
   onSelectProject, activeView, onSelectView,
-  onNewProject, onAddModule,
+  onNewProject, onAddModule, onLogout,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -100,6 +101,11 @@ export function Sidebar({
           <span>IA Copilot</span>
           <span style={{ width: 6, height: 6, borderRadius: "50%",
             background: "#10B981", marginLeft: "auto", flexShrink: 0 }} />
+        </button>
+        <button className="sidebar-item" onClick={onLogout}
+          style={{ color: "var(--sidebar-muted)", marginTop: 4 }}>
+          <span className="sidebar-item-icon">↩</span>
+          <span>Cerrar sesión</span>
         </button>
       </div>
     </aside>
