@@ -27,6 +27,7 @@ export interface ChatMessage {
   isMe: boolean;
   fileUrl?:  string;
   fileType?: string;
+  readBy:    string[];   // user_ids que ya leyeron este mensaje
 }
 
 export interface ProjectMember {
@@ -51,6 +52,7 @@ export interface FunnelNodeData {
   // Runtime callbacks — injected by AppShell, not stored in DB
   onTaskToggle?:     (taskId: string) => void;
   onDeleteTask?:     (taskId: string) => void;
+  onMarkRead?:       () => void;
   onSendMessage?:    (text: string) => void;
   onAddTask?:        (text: string) => void;
   onUpdateNodeData?: (updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => void;

@@ -143,34 +143,43 @@ export function AppShell() {
           .eq("project_id", activeProjectId),
       ]);
 
-      const nodes: Node<FunnelNodeData>[] = (nodesData || []).map((n: any) => ({
-        id: n.id,
-        type: "funnelNode",
-        zIndex: 1,
-        position: { x: n.position_x, y: n.position_y },
-        data: {
-          title:         n.title,
-          subtitle:      n.subtitle || "",
-          icon:          n.icon || "📦",
-          role:          n.role,
-          ownerInitials: n.owner_initials || "",
-          ownerColor:    n.owner_color || "#7C3AED",
-          assignedTo:    n.assigned_to || null,
-          hasUnread:     n.has_unread || false,
-          tasks: (n.node_tasks || [])
-            .sort((a: any, b: any) => a.ord - b.ord)
-            .map((t: any) => ({ id: t.id, text: t.text, done: t.done, order: t.ord })),
-          messages: (n.node_messages || [])
-            .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-            .map((m: any) => ({
-              id: m.id, userId: m.user_id, userName: m.user_name,
-              userInitials: m.user_initials, userColor: m.user_color,
-              text: m.text, createdAt: m.created_at,
-              fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
-              isMe: meRef.current ? m.user_id === meRef.current.id : !!m.is_me,
-            })),
-        },
-      }));
+      const myId = meRef.current?.id;
+      const rawNodes: Node<FunnelNodeData>[] = (nodesData || []).map((n: any) => {
+        const messages: import("@/lib/types").ChatMessage[] = (n.node_messages || [])
+          .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((m: any) => ({
+            id: m.id, userId: m.user_id, userName: m.user_name,
+            userInitials: m.user_initials, userColor: m.user_color,
+            text: m.text, createdAt: m.created_at,
+            fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
+            isMe: myId ? m.user_id === myId : !!m.is_me,
+            readBy: (m.read_by as string[]) || [],
+          }));
+        const hasUnread = myId
+          ? messages.some((m) => m.userId !== myId && !m.readBy.includes(myId))
+          : n.has_unread || false;
+        return {
+          id: n.id,
+          type: "funnelNode",
+          zIndex: 1,
+          position: { x: n.position_x, y: n.position_y },
+          data: {
+            title:         n.title,
+            subtitle:      n.subtitle || "",
+            icon:          n.icon || "📦",
+            role:          n.role,
+            ownerInitials: n.owner_initials || "",
+            ownerColor:    n.owner_color || "#7C3AED",
+            assignedTo:    n.assigned_to || null,
+            hasUnread,
+            tasks: (n.node_tasks || [])
+              .sort((a: any, b: any) => a.ord - b.ord)
+              .map((t: any) => ({ id: t.id, text: t.text, done: t.done, order: t.ord })),
+            messages,
+          },
+        };
+      });
+      const nodes: Node<FunnelNodeData>[] = rawNodes;
 
       const edges: Edge[] = (edgesData || []).map((e: any) => ({
         id: e.id, source: e.source, target: e.target,
@@ -228,7 +237,7 @@ export function AppShell() {
                       userInitials: m.user_initials, userColor: m.user_color,
                       text: m.text, createdAt: m.created_at,
                       fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
-                      isMe: false,
+                      isMe: false, readBy: [],
                     }],
                   },
                 }
@@ -475,12 +484,14 @@ export function AppShell() {
       userInitials: getInitials(me.full_name || me.email),
       userColor:    me.color,
       text, createdAt: new Date().toISOString(), isMe: true,
+      readBy: [me.id],
     };
     supabase.from("node_messages").insert({
       id: msg.id, node_id: nodeId, user_id: msg.userId,
       user_name: msg.userName, user_initials: msg.userInitials,
       user_color: msg.userColor, text: msg.text,
       is_me: msg.isMe, created_at: msg.createdAt,
+      read_by: [msg.userId],
     }).then(() => {});
     setNodesMap((prev) => ({
       ...prev,
@@ -518,6 +529,7 @@ export function AppShell() {
       isMe:         true,
       fileUrl,
       fileType,
+      readBy:       [me.id],
     };
     supabase.from("node_messages").insert({
       id: msg.id, node_id: nodeId, user_id: msg.userId,
@@ -525,6 +537,7 @@ export function AppShell() {
       user_color: msg.userColor, text: msg.text,
       is_me: msg.isMe, created_at: msg.createdAt,
       file_url: fileUrl, file_type: fileType,
+      read_by: [msg.userId],
     }).then(() => {});
     setNodesMap((prev) => ({
       ...prev,
@@ -536,6 +549,33 @@ export function AppShell() {
       ),
     }));
   }, [activeProjectId, supabase, me]);
+
+  /* ── Mark messages as read when node is expanded ───────────── */
+  const handleMarkRead = useCallback((nodeId: string) => {
+    if (!me) return;
+    // Update local state immediately
+    setNodesMap((prev) => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] ?? []).map((n) =>
+        n.id !== nodeId ? n : {
+          ...n,
+          data: {
+            ...n.data,
+            hasUnread: false,
+            messages: n.data.messages.map((m) =>
+              m.userId === me.id || m.readBy.includes(me.id)
+                ? m
+                : { ...m, readBy: [...m.readBy, me.id] }
+            ),
+          },
+        }
+      ),
+    }));
+    // Persist to DB via RPC (graceful — fails silently if column doesn't exist yet)
+    supabase
+      .rpc("mark_node_messages_read", { p_node_id: nodeId, p_user_id: me.id })
+      .then(() => {});
+  }, [activeProjectId, me, supabase]);
 
   /* ── Add funnel module ──────────────────────────────────────── */
   const handleAddModule = useCallback(async () => {
@@ -789,6 +829,7 @@ export function AppShell() {
           members: currentMembers,
           onTaskToggle:     (taskId: string) => handleTaskToggle(n.id, taskId),
           onDeleteTask:     (taskId: string) => handleDeleteTask(n.id, taskId),
+          onMarkRead:       ()               => handleMarkRead(n.id),
           onSendMessage:    (text: string)   => handleSendMessage(n.id, text),
           onAddTask:        (text: string)   => handleAddTask(n.id, text),
           onUpdateNodeData: (updates)        => handleUpdateNodeData(n.id, updates),

@@ -146,7 +146,12 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
       <div
         style={{ display: "flex", alignItems: "flex-start", gap: 6,
           padding: "8px 10px 5px", cursor: "pointer", userSelect: "none" }}
-        onClick={() => !editingTitle && !showRoles && setExpanded((e) => !e)}
+        onClick={() => {
+          if (editingTitle || showRoles) return;
+          const opening = !expanded;
+          setExpanded(opening);
+          if (opening) data.onMarkRead?.();
+        }}
       >
         {/* Icon — click to change role */}
         <span

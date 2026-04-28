@@ -27,8 +27,8 @@ export const DEMO_NODES: Node<FunnelNodeData>[] = [
         { id: "t4", text: "Crear UTMs por fuente",        done: false, order: 3 },
       ],
       messages: [
-        { id: "m1", userId: "ta", userName: "Trafficker", userInitials: "TA", userColor: "#3B82F6", text: "El píxel no está disparando en mobile.", createdAt: "2025-05-01T09:12:00Z", isMe: false },
-        { id: "m2", userId: "fv", userName: "Ferney",     userInitials: "FV", userColor: "#7C3AED", text: "Revisando el script UTM ahora mismo.", createdAt: "2025-05-01T09:35:00Z", isMe: true  },
+        { id: "m1", userId: "ta", userName: "Trafficker", userInitials: "TA", userColor: "#3B82F6", text: "El píxel no está disparando en mobile.", createdAt: "2025-05-01T09:12:00Z", isMe: false, readBy: [] },
+        { id: "m2", userId: "fv", userName: "Ferney",     userInitials: "FV", userColor: "#7C3AED", text: "Revisando el script UTM ahora mismo.", createdAt: "2025-05-01T09:35:00Z", isMe: true,  readBy: ["fv"] },
       ],
     },
   },
@@ -52,7 +52,7 @@ export const DEMO_NODES: Node<FunnelNodeData>[] = [
         { id: "t9", text: "Activar dominio personalizado",     done: false, order: 4 },
       ],
       messages: [
-        { id: "m3", userId: "es", userName: "Estratega", userInitials: "ES", userColor: "#10B981", text: "El headline necesita más urgencia.", createdAt: "2025-05-01T10:00:00Z", isMe: false },
+        { id: "m3", userId: "es", userName: "Estratega", userInitials: "ES", userColor: "#10B981", text: "El headline necesita más urgencia.", createdAt: "2025-05-01T10:00:00Z", isMe: false, readBy: [] },
       ],
     },
   },
