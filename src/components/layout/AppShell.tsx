@@ -56,23 +56,30 @@ export function AppShell() {
   /* ── Load profile + projects on mount ───────────────────────── */
   useEffect(() => {
     async function init() {
-      const profile = await getCurrentProfile();
-      setMe(profile);
+      try {
+        const profile = await getCurrentProfile();
+        setMe(profile);
 
-      const { data: projs } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: true });
+        const { data: projs, error } = await supabase
+          .from("projects")
+          .select("*")
+          .order("created_at", { ascending: true });
 
-      if (projs && projs.length > 0) {
-        const mapped: Project[] = projs.map((p: any) => ({
-          id: p.id, name: p.name, client: p.client || "",
-          status: p.status, progress: 0, blockedCount: 0,
-        }));
-        setProjects(mapped);
-        setActiveProjectId(mapped[0].id);
+        if (error) console.error("Error cargando proyectos:", error.message);
+
+        if (projs && projs.length > 0) {
+          const mapped: Project[] = projs.map((p: any) => ({
+            id: p.id, name: p.name, client: p.client || "",
+            status: p.status, progress: 0, blockedCount: 0,
+          }));
+          setProjects(mapped);
+          setActiveProjectId(mapped[0].id);
+        }
+      } catch (err) {
+        console.error("Error al inicializar AppShell:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
