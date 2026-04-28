@@ -329,7 +329,8 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
 
             {tasks.map((task) => (
               <TaskRow key={task.id} task={task} roleColor={roleColor}
-                onToggle={() => data.onTaskToggle?.(task.id)} />
+                onToggle={() => data.onTaskToggle?.(task.id)}
+                onDelete={() => data.onDeleteTask?.(task.id)} />
             ))}
 
             {/* Inline add task with role-based suggestions */}
@@ -517,25 +518,51 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TaskRow({ task, roleColor, onToggle }: {
-  task: NodeTask; roleColor: string; onToggle: () => void;
+function TaskRow({ task, roleColor, onToggle, onDelete }: {
+  task: NodeTask; roleColor: string; onToggle: () => void; onDelete: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div onClick={(e) => { e.stopPropagation(); onToggle(); }}
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{ display: "flex", alignItems: "flex-start", gap: 6,
-        padding: "3px 0", cursor: "pointer" }}>
-      <div style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, marginTop: 1,
-        border: task.done ? "none" : "1.5px solid var(--border2)",
-        background: task.done ? roleColor : "transparent",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "background 0.15s" }}>
+        padding: "3px 0", cursor: "pointer", position: "relative" }}>
+      {/* Checkbox */}
+      <div
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, marginTop: 1,
+          border: task.done ? "none" : "1.5px solid var(--border2)",
+          background: task.done ? roleColor : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background 0.15s" }}>
         {task.done && <span style={{ color: "#fff", fontSize: 8, lineHeight: 1 }}>✓</span>}
       </div>
-      <span style={{ fontSize: 11, lineHeight: 1.4,
-        color: task.done ? "var(--text3)" : "var(--text)",
-        textDecoration: task.done ? "line-through" : "none" }}>
+      {/* Text */}
+      <span
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        style={{ flex: 1, fontSize: 11, lineHeight: 1.4,
+          color: task.done ? "var(--text3)" : "var(--text)",
+          textDecoration: task.done ? "line-through" : "none" }}>
         {task.text}
       </span>
+      {/* Delete button — visible on hover */}
+      {hovered && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Eliminar tarea"
+          style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+            width: 14, height: 14, borderRadius: 3, border: "none",
+            background: "var(--border2)", color: "var(--text2)",
+            fontSize: 8, lineHeight: 1, cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.12s" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#E24B4A")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border2)")}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }

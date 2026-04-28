@@ -428,6 +428,20 @@ export function AppShell() {
     }
   }, [activeProjectId, supabase]);
 
+  /* ── Delete task from node ──────────────────────────────────── */
+  const handleDeleteTask = useCallback((nodeId: string, taskId: string) => {
+    supabase.from("node_tasks").delete().eq("id", taskId).then(() => {});
+    setNodesMap((prev) => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] ?? []).map((n) =>
+        n.id !== nodeId ? n : {
+          ...n,
+          data: { ...n.data, tasks: n.data.tasks.filter((t) => t.id !== taskId) },
+        }
+      ),
+    }));
+  }, [activeProjectId, supabase]);
+
   /* ── Add task to node ───────────────────────────────────────── */
   const handleAddTask = useCallback((nodeId: string, text: string) => {
     const taskId = `t-${uid()}`;
@@ -774,6 +788,7 @@ export function AppShell() {
           ...n.data,
           members: currentMembers,
           onTaskToggle:     (taskId: string) => handleTaskToggle(n.id, taskId),
+          onDeleteTask:     (taskId: string) => handleDeleteTask(n.id, taskId),
           onSendMessage:    (text: string)   => handleSendMessage(n.id, text),
           onAddTask:        (text: string)   => handleAddTask(n.id, text),
           onUpdateNodeData: (updates)        => handleUpdateNodeData(n.id, updates),

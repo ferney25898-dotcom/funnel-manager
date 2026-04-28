@@ -50,6 +50,7 @@ export interface FunnelNodeData {
   hasUnread: boolean;
   // Runtime callbacks — injected by AppShell, not stored in DB
   onTaskToggle?:     (taskId: string) => void;
+  onDeleteTask?:     (taskId: string) => void;
   onSendMessage?:    (text: string) => void;
   onAddTask?:        (text: string) => void;
   onUpdateNodeData?: (updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => void;
