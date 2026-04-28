@@ -1393,3 +1393,17 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Topbar editable project name ───────────────────────────── */
+.topbar-project-input {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1.5px solid var(--brand);
+  border-radius: 6px;
+  padding: 3px 8px;
+  outline: none;
+  width: 240px;
+  font-family: inherit;
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import type { Project, ProjectMember } from "@/lib/types";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { getInitials } from "@/lib/profiles";
@@ -10,6 +11,7 @@ interface TopbarProps {
   progress:    number;
   members:     ProjectMember[];
   onlineUsers: string[];
+  onRename:    (id: string, name: string) => void;
   onDuplicate: () => void;
   onAddModule: () => void;
   onOpenTeam:  () => void;
@@ -18,21 +20,59 @@ interface TopbarProps {
 export function Topbar({
   projectId, projects, progress,
   members, onlineUsers,
-  onDuplicate, onAddModule, onOpenTeam,
+  onRename, onDuplicate, onAddModule, onOpenTeam,
 }: TopbarProps) {
   const project    = projects.find((p) => p.id === projectId);
   const statusLabel = project ? PROJECT_STATUSES[project.status].label : "—";
   const isActive    = project?.status === "active";
   const blocked     = project?.blockedCount ?? 0;
 
-  const onlineSet  = new Set(onlineUsers);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(project?.name ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setName(project?.name ?? ""); }, [project?.name]);
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  function commitName() {
+    setEditing(false);
+    const trimmed = name.trim();
+    if (trimmed && trimmed !== project?.name) onRename(projectId, trimmed);
+    else setName(project?.name ?? "");
+  }
+
+  const onlineSet     = new Set(onlineUsers);
   const onlineMembers = members.filter((m) => onlineSet.has(m.id));
 
   return (
     <header className="topbar">
-      <span className="topbar-project-name">
-        {project?.name ?? "—"}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={(e) => {
+            if (e.key === "Enter")  commitName();
+            if (e.key === "Escape") { setName(project?.name ?? ""); setEditing(false); }
+          }}
+          className="topbar-project-input"
+        />
+      ) : (
+        <span
+          className="topbar-project-name"
+          onDoubleClick={() => setEditing(true)}
+          title="Doble clic para renombrar"
+          style={{ cursor: "text" }}
+        >
+          {project?.name ?? "—"}
+        </span>
+      )}
 
       <span className={`topbar-badge ${isActive ? "topbar-badge-active" : ""}`}
         style={!isActive ? { background: "#FEF3C7", color: "#92400E" } : undefined}>
@@ -52,7 +92,6 @@ export function Topbar({
         </div>
       </div>
 
-      {/* Online presence avatars */}
       {onlineMembers.length > 0 && (
         <div className="topbar-presence" title={`${onlineMembers.length} en línea`}>
           {onlineMembers.slice(0, 5).map((m) => (

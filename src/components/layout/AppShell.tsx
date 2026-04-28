@@ -303,6 +303,7 @@ export function AppShell() {
         ...prev,
         [activeProjectId]: applyNodeChanges(zoneChanges, prev[activeProjectId] ?? []) as Node<ZoneNodeData>[],
       }));
+      // Persist position
       zoneChanges
         .filter((c): c is Extract<NodeChange, { type: "position" }> =>
           c.type === "position" && !c.dragging && !!c.position
@@ -312,6 +313,12 @@ export function AppShell() {
             .update({ position_x: c.position!.x, position_y: c.position!.y })
             .eq("id", c.id).then(() => {});
         });
+      // Persist deletions (Delete key)
+      zoneChanges
+        .filter((c): c is Extract<NodeChange, { type: "remove" }> => c.type === "remove")
+        .forEach((c) => {
+          supabase.from("funnel_zones").delete().eq("id", c.id).then(() => {});
+        });
     }
 
     if (funnelChanges.length) {
@@ -319,6 +326,7 @@ export function AppShell() {
         ...prev,
         [activeProjectId]: applyNodeChanges(funnelChanges, prev[activeProjectId] ?? []) as Node<FunnelNodeData>[],
       }));
+      // Persist position
       funnelChanges
         .filter((c): c is Extract<NodeChange, { type: "position" }> =>
           c.type === "position" && !c.dragging && !!c.position
@@ -328,6 +336,12 @@ export function AppShell() {
             .update({ position_x: c.position!.x, position_y: c.position!.y })
             .eq("id", c.id).then(() => {});
         });
+      // Persist deletions (Delete key) — cascades to tasks/messages
+      funnelChanges
+        .filter((c): c is Extract<NodeChange, { type: "remove" }> => c.type === "remove")
+        .forEach((c) => {
+          supabase.from("funnel_nodes").delete().eq("id", c.id).then(() => {});
+        });
     }
   }, [activeProjectId, zonesMap, supabase]);
 
@@ -336,7 +350,13 @@ export function AppShell() {
       ...prev,
       [activeProjectId]: applyEdgeChanges(changes, prev[activeProjectId] ?? []),
     }));
-  }, [activeProjectId]);
+    // Persist edge deletions
+    changes
+      .filter((c): c is Extract<EdgeChange, { type: "remove" }> => c.type === "remove")
+      .forEach((c) => {
+        supabase.from("funnel_edges").delete().eq("id", c.id).then(() => {});
+      });
+  }, [activeProjectId, supabase]);
 
   /* ── Connect nodes ──────────────────────────────────────────── */
   const handleConnect = useCallback((connection: Connection) => {
@@ -694,6 +714,15 @@ export function AppShell() {
     setActiveProjectId(newProj.id);
   }, [activeProjectId, projects, nodesMap, edgesMap, zonesMap, supabase]);
 
+  /* ── Rename project ────────────────────────────────────────── */
+  const handleRenameProject = useCallback(async (projectId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, name: trimmed } : p));
+    const { error } = await supabase.from("projects").update({ name: trimmed }).eq("id", projectId);
+    if (error) alert("Error al renombrar: " + error.message);
+  }, [supabase]);
+
   /* ── Delete project ────────────────────────────────────────── */
   const handleDeleteProject = useCallback(async (projectId: string) => {
     const project = projects.find((p) => p.id === projectId);
@@ -815,6 +844,7 @@ export function AppShell() {
         progress={globalProgress}
         members={currentMembers}
         onlineUsers={onlineUsers}
+        onRename={handleRenameProject}
         onDuplicate={handleDuplicate}
         onAddModule={handleAddModule}
         onOpenTeam={() => setTeamOpen(true)}

@@ -8,7 +8,13 @@
       "Bash(npx tsc *)",
       "Bash(git commit -m 'fix: zona no captura clicks en su interior — módulos siempre interactuables *)",
       "Bash(npx next *)",
-      "Bash(git commit -m 'fix: deshabilitar no-explicit-any para build limpio *)"
+      "Bash(git commit -m 'fix: deshabilitar no-explicit-any para build limpio *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr LISTENING)",
+      "Bash(powershell -command \"Get-Process -Id 33936 | Select-Object Id, ProcessName, Path\")",
+      "PowerShell(Stop-Process -Id 33936 -Force)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)"
     ]
   }
 }
