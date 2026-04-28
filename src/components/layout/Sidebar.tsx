@@ -10,6 +10,7 @@ interface SidebarProps {
   activeView:      string;
   onSelectView:    (view: string) => void;
   onNewProject:    () => void;
+  onDeleteProject: (id: string) => void;
   onAddModule:     () => void;
   onAddZone:       () => void;
   onLogout:        () => void;
@@ -25,7 +26,7 @@ const VIEWS = [
 export function Sidebar({
   activeProjectId, projects,
   onSelectProject, activeView, onSelectView,
-  onNewProject, onAddModule, onAddZone, onLogout,
+  onNewProject, onDeleteProject, onAddModule, onAddZone, onLogout,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -39,19 +40,27 @@ export function Sidebar({
       <div className="sidebar-section">
         <div className="sidebar-section-label">Proyectos</div>
         {projects.map((p) => (
-          <button
-            key={p.id}
-            className={`sidebar-item ${p.id === activeProjectId ? "active" : ""}`}
-            onClick={() => onSelectProject(p.id)}
-          >
-            <span className="sidebar-item-dot"
-              style={{ background: PROJECT_STATUSES[p.status].color }} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {p.name}
-            </span>
-          </button>
+          <div key={p.id} className="sidebar-project-row">
+            <button
+              className={`sidebar-item sidebar-project-btn ${p.id === activeProjectId ? "active" : ""}`}
+              onClick={() => onSelectProject(p.id)}
+            >
+              <span className="sidebar-item-dot"
+                style={{ background: PROJECT_STATUSES[p.status].color }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                {p.name}
+              </span>
+            </button>
+            <button
+              className="sidebar-delete-btn"
+              title="Eliminar proyecto"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteProject(p.id);
+              }}
+            >✕</button>
+          </div>
         ))}
-        {/* Bug 4: onNewProject handler real */}
         <button className="sidebar-add-btn" onClick={onNewProject}>
           <span style={{ fontSize: 14 }}>+</span>
           Nuevo proyecto
@@ -78,7 +87,6 @@ export function Sidebar({
       {/* Canvas tools */}
       <div className="sidebar-section">
         <div className="sidebar-section-label">Canvas</div>
-        {/* Bug 2: + Módulo también en sidebar */}
         <button className="sidebar-item" onClick={onAddModule}>
           <span className="sidebar-item-icon">+</span>
           Módulo

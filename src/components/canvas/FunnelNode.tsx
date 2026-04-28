@@ -414,6 +414,39 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
             )}
           </div>
 
+          {/* Archivos adjuntos */}
+          {messages.filter((m) => m.fileUrl).length > 0 && (
+            <div style={{ borderTop: "1px solid var(--border)", padding: "8px 10px 6px" }}>
+              <SectionLabel>Archivos</SectionLabel>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {messages.filter((m) => m.fileUrl).map((m) => (
+                  m.fileType?.startsWith("image/") ? (
+                    <a key={m.id} href={m.fileUrl} target="_blank" rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ display: "block" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={m.fileUrl} alt={m.text}
+                        style={{ width: "100%", maxHeight: 80, objectFit: "cover",
+                          borderRadius: 5, display: "block" }} />
+                    </a>
+                  ) : (
+                    <a key={m.id} href={m.fileUrl} target="_blank" rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ display: "flex", alignItems: "center", gap: 5,
+                        fontSize: 10.5, color: "var(--text)", textDecoration: "none",
+                        padding: "3px 5px", borderRadius: 5,
+                        background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                      <span>📎</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {m.text}
+                      </span>
+                    </a>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Chat */}
           <div style={{ borderTop: "1px solid var(--border)", padding: "8px 10px 8px" }}>
             <SectionLabel>Chat del módulo</SectionLabel>

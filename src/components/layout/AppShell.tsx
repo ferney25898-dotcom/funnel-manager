@@ -10,6 +10,8 @@ import { Topbar }       from "./Topbar";
 import { FunnelCanvas } from "@/components/canvas/FunnelCanvas";
 import { TeamModal }    from "@/components/team/TeamModal";
 import { Dashboard }    from "@/components/dashboard/Dashboard";
+import { RolesView }   from "@/components/views/RolesView";
+import { DocsView }    from "@/components/views/DocsView";
 import { getCurrentProfile, getInitials, type Profile } from "@/lib/profiles";
 import type { FunnelNodeData, Project, ChatMessage, ProjectMember, ZoneNodeData } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -692,6 +694,26 @@ export function AppShell() {
     setActiveProjectId(newProj.id);
   }, [activeProjectId, projects, nodesMap, edgesMap, zonesMap, supabase]);
 
+  /* ── Delete project ────────────────────────────────────────── */
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    if (!confirm(`¿Eliminar el proyecto "${project.name}"? Esta acción no se puede deshacer.`)) return;
+
+    const { error } = await supabase.from("projects").delete().eq("id", projectId);
+    if (error) { alert("Error al eliminar: " + error.message); return; }
+
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setNodesMap((prev) => { const n = { ...prev }; delete n[projectId]; return n; });
+    setEdgesMap((prev) => { const e = { ...prev }; delete e[projectId]; return e; });
+    setZonesMap((prev) => { const z = { ...prev }; delete z[projectId]; return z; });
+
+    if (activeProjectId === projectId) {
+      const remaining = projects.filter((p) => p.id !== projectId);
+      setActiveProjectId(remaining[0]?.id ?? "");
+    }
+  }, [projects, activeProjectId, supabase]);
+
   /* ── Logout ─────────────────────────────────────────────────── */
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -782,6 +804,7 @@ export function AppShell() {
         activeView={activeView}
         onSelectView={setActiveView}
         onNewProject={handleNewProject}
+        onDeleteProject={handleDeleteProject}
         onAddModule={handleAddModule}
         onAddZone={handleAddZone}
         onLogout={handleLogout}
@@ -817,10 +840,15 @@ export function AppShell() {
         </div>
       )}
 
-      {(activeView === "roles" || activeView === "docs") && (
-        <div className="view-placeholder">
-          <span style={{ fontSize: 32 }}>🚧</span>
-          <p>Vista próximamente</p>
+      {activeView === "roles" && (
+        <div className="view-scroll">
+          <RolesView project={activeProject} nodes={currentNodes} members={currentMembers} />
+        </div>
+      )}
+
+      {activeView === "docs" && (
+        <div className="view-scroll">
+          <DocsView project={activeProject} nodes={currentNodes} />
         </div>
       )}
 
