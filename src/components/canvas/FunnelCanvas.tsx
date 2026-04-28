@@ -18,11 +18,12 @@ import "reactflow/dist/style.css";
 
 import { FunnelNode } from "./FunnelNode";
 import { FunnelEdge } from "./FunnelEdge";
+import { ZoneNode }   from "./ZoneNode";
 import { ROLE_COLORS } from "@/lib/constants";
 import type { FunnelNodeData } from "@/lib/types";
 
-const nodeTypes = { funnelNode: FunnelNode };
-const edgeTypes  = { funnelEdge: FunnelEdge };
+const nodeTypes = { funnelNode: FunnelNode, zoneNode: ZoneNode };
+const edgeTypes = { funnelEdge: FunnelEdge };
 
 const defaultEdgeOptions = {
   type: "funnelEdge",
@@ -30,11 +31,11 @@ const defaultEdgeOptions = {
 };
 
 interface FunnelCanvasProps {
-  nodes:          Node<FunnelNodeData>[];
-  edges:          Edge[];
-  onNodesChange:  (changes: NodeChange[]) => void;
-  onEdgesChange:  (changes: EdgeChange[]) => void;
-  onConnect:      (connection: Connection) => void;
+  nodes:         Node[];
+  edges:         Edge[];
+  onNodesChange: (changes: NodeChange[]) => void;
+  onEdgesChange: (changes: EdgeChange[]) => void;
+  onConnect:     (connection: Connection) => void;
 }
 
 export function FunnelCanvas({
@@ -70,7 +71,7 @@ export function FunnelCanvas({
         />
         <Controls showInteractive={false} />
         <MiniMap
-          nodeColor={(n: Node<FunnelNodeData>) =>
+          nodeColor={(n: Node) =>
             ROLE_COLORS[(n.data as FunnelNodeData)?.role] ?? "#7C3AED"
           }
           style={{

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,10 +28,18 @@ export default function LoginPage() {
         window.location.href = "/";
       }
     } else {
+      if (!fullName.trim()) {
+        setError("El nombre es obligatorio");
+        setLoading(false);
+        return;
+      }
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { full_name: fullName.trim() },
+        },
       });
       if (error) {
         setError(error.message);
@@ -55,6 +64,21 @@ export default function LoginPage() {
         </h1>
 
         <form onSubmit={handleSubmit} className="login-form">
+          {mode === "register" && (
+            <div className="login-field">
+              <label htmlFor="fullName">Nombre completo</label>
+              <input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Ferney Vargas"
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
+
           <div className="login-field">
             <label htmlFor="email">Email</label>
             <input

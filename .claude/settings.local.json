@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm run *)",
       "Bash(git cherry-pick *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

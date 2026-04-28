@@ -27,6 +27,14 @@ export interface ChatMessage {
   isMe: boolean;
 }
 
+export interface ProjectMember {
+  id:        string;
+  full_name: string;
+  email:     string;
+  color:     string;
+  role:      "owner" | "editor" | "viewer";
+}
+
 export interface FunnelNodeData {
   title: string;
   subtitle: string;
@@ -34,12 +42,16 @@ export interface FunnelNodeData {
   role: RoleKey;
   ownerInitials: string;
   ownerColor: string;
+  assignedTo?: string | null; // profile id
   tasks: NodeTask[];
   messages: ChatMessage[];
   hasUnread: boolean;
   // Runtime callbacks — injected by AppShell, not stored in DB
-  onTaskToggle?: (taskId: string) => void;
-  onSendMessage?: (text: string) => void;
+  onTaskToggle?:     (taskId: string) => void;
+  onSendMessage?:    (text: string) => void;
+  onAddTask?:        (text: string) => void;
+  onUpdateNodeData?: (updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => void;
+  members?:          ProjectMember[];
 }
 
 export interface Zone {
@@ -50,4 +62,15 @@ export interface Zone {
   y: number;
   width: number;
   height: number;
+}
+
+export interface ZoneNodeData {
+  label:          string;
+  color:          string;
+  width:          number;
+  height:         number;
+  onResize?:      (w: number, h: number) => void;
+  onLabelChange?: (label: string) => void;
+  onColorChange?: (color: string) => void;
+  onDelete?:      () => void;
 }

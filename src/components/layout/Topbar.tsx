@@ -9,9 +9,10 @@ interface TopbarProps {
   progress:    number;
   onDuplicate: () => void;
   onAddModule: () => void;
+  onOpenTeam:  () => void;
 }
 
-export function Topbar({ projectId, projects, progress, onDuplicate, onAddModule }: TopbarProps) {
+export function Topbar({ projectId, projects, progress, onDuplicate, onAddModule, onOpenTeam }: TopbarProps) {
   const project = projects.find((p) => p.id === projectId);
   const statusLabel = project ? PROJECT_STATUSES[project.status].label : "—";
   const isActive    = project?.status === "active";
@@ -41,7 +42,11 @@ export function Topbar({ projectId, projects, progress, onDuplicate, onAddModule
         </div>
       </div>
 
-      {/* Bug 5: Duplicar con handler real */}
+      <button className="topbar-btn" onClick={onOpenTeam} title="Gestionar equipo">
+        <span>👥</span>
+        Equipo
+      </button>
+
       <button className="topbar-btn" onClick={onDuplicate} title="Duplicar lanzamiento">
         <span>⧉</span>
         Duplicar

@@ -11,6 +11,7 @@ interface SidebarProps {
   onSelectView:    (view: string) => void;
   onNewProject:    () => void;
   onAddModule:     () => void;
+  onAddZone:       () => void;
   onLogout:        () => void;
 }
 
@@ -24,7 +25,7 @@ const VIEWS = [
 export function Sidebar({
   activeProjectId, projects,
   onSelectProject, activeView, onSelectView,
-  onNewProject, onAddModule, onLogout,
+  onNewProject, onAddModule, onAddZone, onLogout,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -82,7 +83,7 @@ export function Sidebar({
           <span className="sidebar-item-icon">+</span>
           Módulo
         </button>
-        <button className="sidebar-item">
+        <button className="sidebar-item" onClick={onAddZone}>
           <span className="sidebar-item-icon">⬚</span>
           Zona
         </button>
