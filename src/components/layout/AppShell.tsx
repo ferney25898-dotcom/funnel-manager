@@ -13,6 +13,7 @@ import { Dashboard }    from "@/components/dashboard/Dashboard";
 import { RolesView }   from "@/components/views/RolesView";
 import { DocsView }    from "@/components/views/DocsView";
 import { getCurrentProfile, getInitials, type Profile } from "@/lib/profiles";
+import { ProfileModal } from "@/components/profile/ProfileModal";
 import type { FunnelNodeData, Project, ChatMessage, ProjectMember, ZoneNodeData } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/constants";
 
@@ -41,6 +42,7 @@ export function AppShell() {
   const [edgesMap,         setEdgesMap]          = useState<EdgesMap>({});
   const [loading,          setLoading]           = useState(true);
   const [teamOpen,         setTeamOpen]          = useState(false);
+  const [profileOpen,      setProfileOpen]        = useState(false);
   const [me,               setMe]               = useState<Profile | null>(null);
   const [membersByProject, setMembersByProject]  = useState<Record<string, ProjectMember[]>>({});
   const [onlineUsers,      setOnlineUsers]       = useState<string[]>([]);
@@ -743,6 +745,11 @@ export function AppShell() {
     }
   }, [projects, activeProjectId, supabase]);
 
+  /* ── Update own profile ─────────────────────────────────────── */
+  const handleUpdateProfile = useCallback((updated: Profile) => {
+    setMe(updated);
+  }, []);
+
   /* ── Logout ─────────────────────────────────────────────────── */
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -837,6 +844,8 @@ export function AppShell() {
         onAddModule={handleAddModule}
         onAddZone={handleAddZone}
         onLogout={handleLogout}
+        me={me}
+        onOpenProfile={() => setProfileOpen(true)}
       />
       <Topbar
         projectId={activeProjectId}
@@ -884,6 +893,14 @@ export function AppShell() {
 
       {teamOpen && (
         <TeamModal projectId={activeProjectId} onClose={() => setTeamOpen(false)} />
+      )}
+
+      {profileOpen && me && (
+        <ProfileModal
+          me={me}
+          onClose={() => setProfileOpen(false)}
+          onUpdate={handleUpdateProfile}
+        />
       )}
     </div>
   );

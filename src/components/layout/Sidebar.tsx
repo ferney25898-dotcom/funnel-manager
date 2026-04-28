@@ -1,6 +1,7 @@
 "use client";
 
 import { PROJECT_STATUSES } from "@/lib/constants";
+import { getInitials, type Profile } from "@/lib/profiles";
 import type { Project } from "@/lib/types";
 
 interface SidebarProps {
@@ -14,6 +15,8 @@ interface SidebarProps {
   onAddModule:     () => void;
   onAddZone:       () => void;
   onLogout:        () => void;
+  me:              Profile | null;
+  onOpenProfile:   () => void;
 }
 
 const VIEWS = [
@@ -27,6 +30,7 @@ export function Sidebar({
   activeProjectId, projects,
   onSelectProject, activeView, onSelectView,
   onNewProject, onDeleteProject, onAddModule, onAddZone, onLogout,
+  me, onOpenProfile,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -117,6 +121,19 @@ export function Sidebar({
           <span>Cerrar sesión</span>
         </button>
       </div>
+
+      {/* User card */}
+      {me && (
+        <button className="sidebar-user-card" onClick={onOpenProfile} title="Editar mi perfil">
+          <div className="sidebar-user-avatar" style={{ background: me.color }}>
+            {getInitials(me.full_name || me.email)}
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{me.full_name || me.email}</span>
+            <span className="sidebar-user-role">Mi perfil →</span>
+          </div>
+        </button>
+      )}
     </aside>
   );
 }
