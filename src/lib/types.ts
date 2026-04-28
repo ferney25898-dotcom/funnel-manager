@@ -25,6 +25,8 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   isMe: boolean;
+  fileUrl?:  string;
+  fileType?: string;
 }
 
 export interface ProjectMember {
@@ -51,6 +53,7 @@ export interface FunnelNodeData {
   onSendMessage?:    (text: string) => void;
   onAddTask?:        (text: string) => void;
   onUpdateNodeData?: (updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => void;
+  onUploadFile?:     (file: File) => Promise<void>;
   members?:          ProjectMember[];
 }
 

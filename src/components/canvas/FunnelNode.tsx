@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { ROLE_LABELS, TASK_SUGGESTIONS } from "@/lib/constants";
 import { getInitials } from "@/lib/profiles";
@@ -41,9 +41,10 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
   const [showRoles,    setShowRoles]    = useState(false);
   const [showAssign,   setShowAssign]   = useState(false);
 
-  const chatRef  = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const taskRef  = useRef<HTMLInputElement>(null);
+  const chatRef    = useRef<HTMLDivElement>(null);
+  const titleRef   = useRef<HTMLInputElement>(null);
+  const taskRef    = useRef<HTMLInputElement>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
 
   const roleColor = getRoleColor(data.role);
   const tasks     = data.tasks;
@@ -85,6 +86,21 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
     data.onSendMessage?.(text);
     setMsgInput("");
   };
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) data.onUploadFile?.(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }, [data]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const imageItem = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) data.onUploadFile?.(file);
+    }
+  }, [data]);
 
   const addTask = () => {
     const text = taskInput.trim();
@@ -418,7 +434,8 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
               <input
                 value={msgInput}
                 onChange={(e) => setMsgInput(e.target.value)}
-                placeholder="Mensaje al dueño…"
+                onPaste={handlePaste}
+                placeholder="Mensaje… (Ctrl+V pega imagen)"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") { e.stopPropagation(); sendMessage(); }
                   e.stopPropagation();
@@ -427,6 +444,22 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
                   border: "1px solid var(--border)", borderRadius: "var(--radius-inner)",
                   background: "var(--surface)", color: "var(--text)", outline: "none" }}
               />
+              {/* File attach button */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                style={{ display: "none" }}
+                onChange={handleFileSelect}
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                title="Adjuntar archivo"
+                style={{ width: 22, height: 22, background: "var(--border)", color: "var(--text2)",
+                  border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                📎
+              </button>
               <button onClick={(e) => { e.stopPropagation(); sendMessage(); }}
                 style={{ width: 22, height: 22, background: roleColor, color: "#fff",
                   border: "none", borderRadius: 5, cursor: "pointer", fontSize: 11,
@@ -475,6 +508,9 @@ function TaskRow({ task, roleColor, onToggle }: {
 }
 
 function MessageBubble({ msg, roleColor }: { msg: ChatMessage; roleColor: string }) {
+  const isImage = msg.fileType?.startsWith("image/");
+  const isFile  = !!msg.fileUrl && !isImage;
+
   return (
     <div style={{ display: "flex", flexDirection: "column",
       alignItems: msg.isMe ? "flex-end" : "flex-start" }}>
@@ -489,14 +525,42 @@ function MessageBubble({ msg, roleColor }: { msg: ChatMessage; roleColor: string
           {msg.userName} · {fmtTime(msg.createdAt)}
         </span>
       </div>
-      <div style={{ maxWidth: "88%", fontSize: 11, lineHeight: 1.4,
-        color: "var(--text)", padding: "4px 7px",
-        background: msg.isMe ? `${roleColor}18` : "var(--border)",
-        borderRadius: msg.isMe ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
-        userSelect: "text", wordBreak: "break-word", whiteSpace: "pre-wrap" }}
-        onMouseDown={(e) => e.stopPropagation()}>
-        {linkify(msg.text)}
-      </div>
+
+      {isImage ? (
+        <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={msg.fileUrl}
+            alt={msg.text}
+            style={{ maxWidth: 160, maxHeight: 120, borderRadius: 6,
+              display: "block", cursor: "pointer", objectFit: "cover" }}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+        </a>
+      ) : isFile ? (
+        <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ display: "flex", alignItems: "center", gap: 5,
+            padding: "4px 8px", borderRadius: 6, fontSize: 10.5,
+            background: msg.isMe ? `${roleColor}18` : "var(--border)",
+            color: "var(--text)", textDecoration: "none", maxWidth: 160 }}>
+          <span>📎</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {msg.text}
+          </span>
+        </a>
+      ) : (
+        <div style={{ maxWidth: "88%", fontSize: 11, lineHeight: 1.4,
+          color: "var(--text)", padding: "4px 7px",
+          background: msg.isMe ? `${roleColor}18` : "var(--border)",
+          borderRadius: msg.isMe ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
+          userSelect: "text", wordBreak: "break-word", whiteSpace: "pre-wrap" }}
+          onMouseDown={(e) => e.stopPropagation()}>
+          {linkify(msg.text)}
+        </div>
+      )}
     </div>
   );
 }

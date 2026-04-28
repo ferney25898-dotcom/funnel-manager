@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { applyNodeChanges, applyEdgeChanges, addEdge } from "reactflow";
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from "reactflow";
 
@@ -24,10 +24,6 @@ function computeProgress(nodes: Node<FunnelNodeData>[]): number {
   return Math.round((all.filter((t) => t.done).length / all.length) * 100);
 }
 
-function isZone(n: Node): boolean {
-  return n.type === "zoneNode";
-}
-
 type NodesMap = Record<string, Node<FunnelNodeData>[]>;
 type ZonesMap = Record<string, Node<ZoneNodeData>[]>;
 type EdgesMap  = Record<string, Edge[]>;
@@ -45,6 +41,13 @@ export function AppShell() {
   const [teamOpen,         setTeamOpen]          = useState(false);
   const [me,               setMe]               = useState<Profile | null>(null);
   const [membersByProject, setMembersByProject]  = useState<Record<string, ProjectMember[]>>({});
+  const [onlineUsers,      setOnlineUsers]       = useState<string[]>([]);
+
+  // Ref to avoid stale closure in realtime handlers
+  const activeProjectIdRef = useRef(activeProjectId);
+  const meRef              = useRef(me);
+  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+  useEffect(() => { meRef.current = me; }, [me]);
 
   /* ── Load profile + projects on mount ───────────────────────── */
   useEffect(() => {
@@ -109,7 +112,7 @@ export function AppShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
-  /* ── Load nodes + zones + edges when project changes (lazy) ─── */
+  /* ── Load nodes + zones + edges when project changes ────────── */
   useEffect(() => {
     if (!activeProjectId || nodesMap[activeProjectId] !== undefined) return;
 
@@ -132,6 +135,7 @@ export function AppShell() {
       const nodes: Node<FunnelNodeData>[] = (nodesData || []).map((n: any) => ({
         id: n.id,
         type: "funnelNode",
+        zIndex: 1,
         position: { x: n.position_x, y: n.position_y },
         data: {
           title:         n.title,
@@ -151,7 +155,8 @@ export function AppShell() {
               id: m.id, userId: m.user_id, userName: m.user_name,
               userInitials: m.user_initials, userColor: m.user_color,
               text: m.text, createdAt: m.created_at,
-              isMe: me ? m.user_id === me.id : !!m.is_me,
+              fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
+              isMe: meRef.current ? m.user_id === meRef.current.id : !!m.is_me,
             })),
         },
       }));
@@ -185,6 +190,91 @@ export function AppShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
+  /* ── Realtime: mensajes + tareas ────────────────────────────── */
+  useEffect(() => {
+    if (!activeProjectId || !me) return;
+
+    const channel = supabase
+      .channel(`rt:${activeProjectId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "node_messages" },
+        (payload) => {
+          const m = payload.new as any;
+          if (m.user_id === meRef.current?.id) return; // own message, already in state
+          const pid = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[pid] ?? [];
+            if (!nodes.some((n) => n.id === m.node_id)) return prev;
+            return {
+              ...prev,
+              [pid]: nodes.map((n) =>
+                n.id !== m.node_id ? n : {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    hasUnread: true,
+                    messages: [...n.data.messages, {
+                      id: m.id, userId: m.user_id, userName: m.user_name,
+                      userInitials: m.user_initials, userColor: m.user_color,
+                      text: m.text, createdAt: m.created_at,
+                      fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
+                      isMe: false,
+                    }],
+                  },
+                }
+              ),
+            };
+          });
+        }
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "node_tasks" },
+        (payload) => {
+          const t = payload.new as any;
+          const pid = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[pid] ?? [];
+            if (!nodes.some((n) => n.data.tasks.some((tk) => tk.id === t.id))) return prev;
+            return {
+              ...prev,
+              [pid]: nodes.map((n) => ({
+                ...n,
+                data: {
+                  ...n.data,
+                  tasks: n.data.tasks.map((tk) =>
+                    tk.id !== t.id ? tk : { ...tk, done: t.done }
+                  ),
+                },
+              })),
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, me?.id]);
+
+  /* ── Presencia: usuarios en línea ───────────────────────────── */
+  useEffect(() => {
+    if (!activeProjectId || !me) return;
+
+    const ch = supabase
+      .channel(`presence:${activeProjectId}`)
+      .on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState<{ user_id: string }>();
+        const ids = Object.values(state).flat().map((p) => p.user_id);
+        setOnlineUsers(ids);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await ch.track({ user_id: me.id });
+        }
+      });
+
+    return () => { supabase.removeChannel(ch); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, me?.id]);
+
   const currentNodes   = useMemo(() => nodesMap[activeProjectId]  ?? [], [nodesMap,  activeProjectId]);
   const currentEdges   = useMemo(() => edgesMap[activeProjectId]  ?? [], [edgesMap,  activeProjectId]);
   const currentZones   = useMemo(() => zonesMap[activeProjectId]  ?? [], [zonesMap,  activeProjectId]);
@@ -203,7 +293,7 @@ export function AppShell() {
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     const zoneIds = new Set((zonesMap[activeProjectId] ?? []).map((z) => z.id));
 
-    const zoneChanges  = changes.filter((c) => "id" in c && zoneIds.has(c.id));
+    const zoneChanges   = changes.filter((c) => "id" in c && zoneIds.has(c.id));
     const funnelChanges = changes.filter((c) => !("id" in c) || !zoneIds.has(c.id));
 
     if (zoneChanges.length) {
@@ -216,11 +306,9 @@ export function AppShell() {
           c.type === "position" && !c.dragging && !!c.position
         )
         .forEach((c) => {
-          supabase
-            .from("funnel_zones")
+          supabase.from("funnel_zones")
             .update({ position_x: c.position!.x, position_y: c.position!.y })
-            .eq("id", c.id)
-            .then(() => {});
+            .eq("id", c.id).then(() => {});
         });
     }
 
@@ -234,11 +322,9 @@ export function AppShell() {
           c.type === "position" && !c.dragging && !!c.position
         )
         .forEach((c) => {
-          supabase
-            .from("funnel_nodes")
+          supabase.from("funnel_nodes")
             .update({ position_x: c.position!.x, position_y: c.position!.y })
-            .eq("id", c.id)
-            .then(() => {});
+            .eq("id", c.id).then(() => {});
         });
     }
   }, [activeProjectId, zonesMap, supabase]);
@@ -301,10 +387,10 @@ export function AppShell() {
       ),
     }));
     const dbUpdates: Record<string, string | null> = {};
-    if (updates.title    !== undefined) dbUpdates.title    = updates.title!;
-    if (updates.role     !== undefined) dbUpdates.role     = updates.role!;
-    if (updates.icon     !== undefined) dbUpdates.icon     = updates.icon!;
-    if (updates.subtitle !== undefined) dbUpdates.subtitle = updates.subtitle!;
+    if (updates.title      !== undefined) dbUpdates.title      = updates.title!;
+    if (updates.role       !== undefined) dbUpdates.role       = updates.role!;
+    if (updates.icon       !== undefined) dbUpdates.icon       = updates.icon!;
+    if (updates.subtitle   !== undefined) dbUpdates.subtitle   = updates.subtitle!;
     if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
     if (Object.keys(dbUpdates).length) {
       supabase.from("funnel_nodes").update(dbUpdates).eq("id", nodeId).then(() => {});
@@ -334,7 +420,7 @@ export function AppShell() {
     }));
   }, [activeProjectId, nodesMap, supabase]);
 
-  /* ── Send message ───────────────────────────────────────────── */
+  /* ── Send text message ──────────────────────────────────────── */
   const handleSendMessage = useCallback((nodeId: string, text: string) => {
     if (!me) return;
     const msg: ChatMessage = {
@@ -350,6 +436,50 @@ export function AppShell() {
       user_name: msg.userName, user_initials: msg.userInitials,
       user_color: msg.userColor, text: msg.text,
       is_me: msg.isMe, created_at: msg.createdAt,
+    }).then(() => {});
+    setNodesMap((prev) => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] ?? []).map((n) =>
+        n.id !== nodeId ? n : {
+          ...n,
+          data: { ...n.data, messages: [...n.data.messages, msg], hasUnread: false },
+        }
+      ),
+    }));
+  }, [activeProjectId, supabase, me]);
+
+  /* ── Upload file + send as message ─────────────────────────── */
+  const handleUploadFile = useCallback(async (nodeId: string, file: File) => {
+    if (!me) return;
+    const ext  = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+    const path = `${activeProjectId}/${nodeId}/${uid()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("node-attachments")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+    if (error) { console.error("Upload error:", error.message); return; }
+    const { data: urlData } = supabase.storage
+      .from("node-attachments")
+      .getPublicUrl(path);
+    const fileUrl  = urlData.publicUrl;
+    const fileType = file.type;
+    const msg: ChatMessage = {
+      id: `msg-${uid()}`,
+      userId:       me.id,
+      userName:     me.full_name || me.email,
+      userInitials: getInitials(me.full_name || me.email),
+      userColor:    me.color,
+      text:         file.name,
+      createdAt:    new Date().toISOString(),
+      isMe:         true,
+      fileUrl,
+      fileType,
+    };
+    supabase.from("node_messages").insert({
+      id: msg.id, node_id: nodeId, user_id: msg.userId,
+      user_name: msg.userName, user_initials: msg.userInitials,
+      user_color: msg.userColor, text: msg.text,
+      is_me: msg.isMe, created_at: msg.createdAt,
+      file_url: fileUrl, file_type: fileType,
     }).then(() => {});
     setNodesMap((prev) => ({
       ...prev,
@@ -379,7 +509,7 @@ export function AppShell() {
     });
 
     const newNode: Node<FunnelNodeData> = {
-      id, type: "funnelNode",
+      id, type: "funnelNode", zIndex: 1,
       position: { x: lastX, y: 160 },
       data: {
         title: "Nuevo Módulo", subtitle: ROLE_LABELS["ghl"],
@@ -396,12 +526,12 @@ export function AppShell() {
 
   /* ── Add zone ───────────────────────────────────────────────── */
   const handleAddZone = useCallback(async () => {
-    const id     = `zone-${uid()}`;
-    const W      = 360;
-    const H      = 260;
-    const zones  = currentZones;
-    const lastX  = zones.length ? Math.max(...zones.map((z) => z.position.x)) + 40 : 60;
-    const lastY  = zones.length ? Math.max(...zones.map((z) => z.position.y)) + 40 : 60;
+    const id    = `zone-${uid()}`;
+    const W     = 360;
+    const H     = 260;
+    const zones = currentZones;
+    const lastX = zones.length ? Math.max(...zones.map((z) => z.position.x)) + 40 : 60;
+    const lastY = zones.length ? Math.max(...zones.map((z) => z.position.y)) + 40 : 60;
 
     await supabase.from("funnel_zones").insert({
       id, project_id: activeProjectId,
@@ -423,22 +553,17 @@ export function AppShell() {
     }));
   }, [activeProjectId, currentZones, supabase]);
 
-  /* ── Zone resize ────────────────────────────────────────────── */
+  /* ── Zone resize / label / color / delete ───────────────────── */
   const handleZoneResize = useCallback((zoneId: string, w: number, h: number) => {
     setZonesMap((prev) => ({
       ...prev,
       [activeProjectId]: (prev[activeProjectId] ?? []).map((z) =>
-        z.id !== zoneId ? z : {
-          ...z,
-          style: { ...z.style, width: w, height: h },
-          data:  { ...z.data,  width: w, height: h },
-        }
+        z.id !== zoneId ? z : { ...z, style: { ...z.style, width: w, height: h }, data: { ...z.data, width: w, height: h } }
       ),
     }));
     supabase.from("funnel_zones").update({ width: w, height: h }).eq("id", zoneId).then(() => {});
   }, [activeProjectId, supabase]);
 
-  /* ── Zone label change ──────────────────────────────────────── */
   const handleZoneLabelChange = useCallback((zoneId: string, label: string) => {
     setZonesMap((prev) => ({
       ...prev,
@@ -449,7 +574,6 @@ export function AppShell() {
     supabase.from("funnel_zones").update({ label }).eq("id", zoneId).then(() => {});
   }, [activeProjectId, supabase]);
 
-  /* ── Zone color change ──────────────────────────────────────── */
   const handleZoneColorChange = useCallback((zoneId: string, color: string) => {
     setZonesMap((prev) => ({
       ...prev,
@@ -460,7 +584,6 @@ export function AppShell() {
     supabase.from("funnel_zones").update({ color }).eq("id", zoneId).then(() => {});
   }, [activeProjectId, supabase]);
 
-  /* ── Zone delete ────────────────────────────────────────────── */
   const handleZoneDelete = useCallback((zoneId: string) => {
     setZonesMap((prev) => ({
       ...prev,
@@ -472,15 +595,11 @@ export function AppShell() {
   /* ── New project ────────────────────────────────────────────── */
   const handleNewProject = useCallback(async () => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
-      alert("Error de auth: " + (authErr?.message ?? "sin sesión"));
-      return;
-    }
+    if (authErr || !user) { alert("Error de auth: " + (authErr?.message ?? "sin sesión")); return; }
     const { data, error } = await supabase
       .from("projects")
       .insert({ user_id: user.id, name: "Nuevo Proyecto", client: "—", status: "draft" })
-      .select()
-      .single();
+      .select().single();
     if (error) { alert("Error al crear proyecto: " + error.message); return; }
     if (!data)  { alert("No se pudo crear el proyecto (sin datos)"); return; }
 
@@ -505,8 +624,7 @@ export function AppShell() {
     const { data: newProj } = await supabase
       .from("projects")
       .insert({ user_id: user.id, name: `${source.name} (copia)`, client: source.client, status: "draft" })
-      .select()
-      .single();
+      .select().single();
     if (!newProj) return;
 
     const idMap: Record<string, string> = {};
@@ -548,10 +666,10 @@ export function AppShell() {
     }
 
     const newNodes: Node<FunnelNodeData>[] = sourceNodes.map((n) => ({
-      ...n, id: idMap[n.id],
+      ...n, id: idMap[n.id], zIndex: 1,
       data: {
         ...n.data,
-        tasks:    n.data.tasks.map((t) => ({ ...t, id: `t-${uid()}`, done: false })),
+        tasks: n.data.tasks.map((t) => ({ ...t, id: `t-${uid()}`, done: false })),
         messages: [], hasUnread: false,
       },
     }));
@@ -586,6 +704,7 @@ export function AppShell() {
     () =>
       currentNodes.map((n) => ({
         ...n,
+        zIndex: 1,
         data: {
           ...n.data,
           members: currentMembers,
@@ -593,6 +712,7 @@ export function AppShell() {
           onSendMessage:    (text: string)   => handleSendMessage(n.id, text),
           onAddTask:        (text: string)   => handleAddTask(n.id, text),
           onUpdateNodeData: (updates)        => handleUpdateNodeData(n.id, updates),
+          onUploadFile:     (file: File)     => handleUploadFile(n.id, file),
         },
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -616,7 +736,7 @@ export function AppShell() {
     [currentZones]
   );
 
-  /* ── Merged node list for React Flow (zones first = behind) ─── */
+  /* ── Merged node list (zones first = behind) ────────────────── */
   const allNodes = useMemo(
     () => [...zonesWithCallbacks, ...nodesWithCallbacks],
     [zonesWithCallbacks, nodesWithCallbacks]
@@ -632,7 +752,7 @@ export function AppShell() {
     );
   }
 
-  /* ── Empty state (first time) ───────────────────────────────── */
+  /* ── Empty state ────────────────────────────────────────────── */
   if (projects.length === 0) {
     return (
       <div className="app-loading">
@@ -670,6 +790,8 @@ export function AppShell() {
         projectId={activeProjectId}
         projects={projects}
         progress={globalProgress}
+        members={currentMembers}
+        onlineUsers={onlineUsers}
         onDuplicate={handleDuplicate}
         onAddModule={handleAddModule}
         onOpenTeam={() => setTeamOpen(true)}
