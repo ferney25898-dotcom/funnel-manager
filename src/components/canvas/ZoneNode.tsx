@@ -46,11 +46,12 @@ export function ZoneNode({ data, selected }: NodeProps<ZoneNodeData>) {
     <div
       className="zone-node"
       style={{
-        width:       data.width,
-        height:      data.height,
-        borderColor: data.color,
-        background:  `${data.color}12`,
-        boxShadow:   selected ? `0 0 0 2px ${data.color}` : "none",
+        width:         data.width,
+        height:        data.height,
+        borderColor:   data.color,
+        background:    `${data.color}12`,
+        boxShadow:     selected ? `0 0 0 2px ${data.color}` : "none",
+        pointerEvents: "none",   /* interior pasa eventos a los nodos encima */
       }}
     >
       {/* Top bar: label + color picker + delete */}
