@@ -210,23 +210,28 @@ export function AppShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
-  /* ── Realtime: mensajes + tareas ────────────────────────────── */
+  /* ── Realtime: mensajes, tareas, nodos, edges ───────────────── */
   useEffect(() => {
     if (!activeProjectId || !me) return;
 
+    const pid = activeProjectId; // captura estable para filtros del servidor
+
     const channel = supabase
-      .channel(`rt:${activeProjectId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "node_messages" },
+      .channel(`rt:${pid}`)
+
+      /* ── PROBLEMA 1: chat ─────────────────────────────────── */
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "node_messages" },
         (payload) => {
           const m = payload.new as any;
-          if (m.user_id === meRef.current?.id) return; // own message, already in state
-          const pid = activeProjectIdRef.current;
+          if (m.user_id === meRef.current?.id) return; // propio, ya está en estado
+          const cur = activeProjectIdRef.current;
           setNodesMap((prev) => {
-            const nodes = prev[pid] ?? [];
+            const nodes = prev[cur] ?? [];
             if (!nodes.some((n) => n.id === m.node_id)) return prev;
             return {
               ...prev,
-              [pid]: nodes.map((n) =>
+              [cur]: nodes.map((n) =>
                 n.id !== m.node_id ? n : {
                   ...n,
                   data: {
@@ -236,7 +241,8 @@ export function AppShell() {
                       id: m.id, userId: m.user_id, userName: m.user_name,
                       userInitials: m.user_initials, userColor: m.user_color,
                       text: m.text, createdAt: m.created_at,
-                      fileUrl: m.file_url || undefined, fileType: m.file_type || undefined,
+                      fileUrl: m.file_url || undefined,
+                      fileType: m.file_type || undefined,
                       isMe: false, readBy: [],
                     }],
                   },
@@ -246,16 +252,19 @@ export function AppShell() {
           });
         }
       )
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "node_tasks" },
+
+      /* ── Tareas: toggle de otro usuario (UPDATE) ─────────── */
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "node_tasks" },
         (payload) => {
           const t = payload.new as any;
-          const pid = activeProjectIdRef.current;
+          const cur = activeProjectIdRef.current;
           setNodesMap((prev) => {
-            const nodes = prev[pid] ?? [];
+            const nodes = prev[cur] ?? [];
             if (!nodes.some((n) => n.data.tasks.some((tk) => tk.id === t.id))) return prev;
             return {
               ...prev,
-              [pid]: nodes.map((n) => ({
+              [cur]: nodes.map((n) => ({
                 ...n,
                 data: {
                   ...n.data,
@@ -268,6 +277,170 @@ export function AppShell() {
           });
         }
       )
+
+      /* ── Tareas: nueva tarea de otro usuario (INSERT) ────── */
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "node_tasks" },
+        (payload) => {
+          const t = payload.new as any;
+          const cur = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[cur] ?? [];
+            const target = nodes.find((n) => n.id === t.node_id);
+            if (!target) return prev;
+            if (target.data.tasks.some((tk) => tk.id === t.id)) return prev; // ya existe (insert propio)
+            return {
+              ...prev,
+              [cur]: nodes.map((n) =>
+                n.id !== t.node_id ? n : {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    tasks: [...n.data.tasks, { id: t.id, text: t.text, done: t.done, order: t.ord }]
+                      .sort((a, b) => a.order - b.order),
+                  },
+                }
+              ),
+            };
+          });
+        }
+      )
+
+      /* ── Tareas: eliminar tarea de otro usuario (DELETE) ─── */
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "node_tasks" },
+        (payload) => {
+          const t = payload.old as any;
+          if (!t?.id) return;
+          const cur = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[cur] ?? [];
+            return {
+              ...prev,
+              [cur]: nodes.map((n) => ({
+                ...n,
+                data: { ...n.data, tasks: n.data.tasks.filter((tk) => tk.id !== t.id) },
+              })),
+            };
+          });
+        }
+      )
+
+      /* ── PROBLEMA 2: dueño del módulo (UPDATE de nodos) ───── */
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "funnel_nodes",
+          filter: `project_id=eq.${pid}` },
+        (payload) => {
+          const n = payload.new as any;
+          const cur = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[cur] ?? [];
+            if (!nodes.some((node) => node.id === n.id)) return prev;
+            return {
+              ...prev,
+              [cur]: nodes.map((node) =>
+                node.id !== n.id ? node : {
+                  ...node,
+                  position: { x: n.position_x, y: n.position_y },
+                  data: {
+                    ...node.data,
+                    title:         n.title,
+                    subtitle:      n.subtitle || "",
+                    icon:          n.icon || "📦",
+                    role:          n.role,
+                    ownerInitials: n.owner_initials || "",
+                    ownerColor:    n.owner_color || "#7C3AED",
+                    assignedTo:    n.assigned_to || null,
+                  },
+                }
+              ),
+            };
+          });
+        }
+      )
+
+      /* ── Nodos: otro usuario añadió módulo (INSERT) ─────────── */
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "funnel_nodes",
+          filter: `project_id=eq.${pid}` },
+        (payload) => {
+          const n = payload.new as any;
+          const cur = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[cur] ?? [];
+            if (nodes.some((node) => node.id === n.id)) return prev; // ya existe (insert propio)
+            const newNode: Node<FunnelNodeData> = {
+              id: n.id, type: "funnelNode", zIndex: 1,
+              position: { x: n.position_x, y: n.position_y },
+              data: {
+                title:         n.title,
+                subtitle:      n.subtitle || "",
+                icon:          n.icon || "📦",
+                role:          n.role,
+                ownerInitials: n.owner_initials || "",
+                ownerColor:    n.owner_color || "#7C3AED",
+                assignedTo:    n.assigned_to || null,
+                tasks: [], messages: [], hasUnread: false,
+              },
+            };
+            return { ...prev, [cur]: [...nodes, newNode] };
+          });
+        }
+      )
+
+      /* ── Nodos: otro usuario eliminó módulo (DELETE) ─────────── */
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "funnel_nodes",
+          filter: `project_id=eq.${pid}` },
+        (payload) => {
+          const n = payload.old as any;
+          if (!n?.id) return;
+          const cur = activeProjectIdRef.current;
+          setNodesMap((prev) => {
+            const nodes = prev[cur] ?? [];
+            if (!nodes.some((node) => node.id === n.id)) return prev;
+            return { ...prev, [cur]: nodes.filter((node) => node.id !== n.id) };
+          });
+        }
+      )
+
+      /* ── PROBLEMA 3: conexiones — nuevo edge (INSERT) ─────── */
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "funnel_edges",
+          filter: `project_id=eq.${pid}` },
+        (payload) => {
+          const e = payload.new as any;
+          const cur = activeProjectIdRef.current;
+          setEdgesMap((prev) => {
+            const edges = prev[cur] ?? [];
+            if (edges.some((edge) => edge.id === e.id)) return prev; // ya existe (insert propio)
+            const newEdge: Edge = {
+              id: e.id, source: e.source, target: e.target,
+              sourceHandle: e.source_handle ?? null,
+              targetHandle: e.target_handle ?? null,
+              type: "funnelEdge", animated: e.animated ?? false,
+              data: { dashed: e.dashed ?? false, label: e.label ?? "" },
+            };
+            return { ...prev, [cur]: [...edges, newEdge] };
+          });
+        }
+      )
+
+      /* ── PROBLEMA 3: conexiones — eliminar edge (DELETE) ──── */
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "funnel_edges",
+          filter: `project_id=eq.${pid}` },
+        (payload) => {
+          const e = payload.old as any;
+          if (!e?.id) return;
+          const cur = activeProjectIdRef.current;
+          setEdgesMap((prev) => {
+            const edges = prev[cur] ?? [];
+            return { ...prev, [cur]: edges.filter((edge) => edge.id !== e.id) };
+          });
+        }
+      )
+
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -419,7 +592,7 @@ export function AppShell() {
   }, [activeProjectId, supabase]);
 
   /* ── Update node data ───────────────────────────────────────── */
-  const handleUpdateNodeData = useCallback((nodeId: string, updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => {
+  const handleUpdateNodeData = useCallback((nodeId: string, updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null; ownerInitials?: string; ownerColor?: string }) => {
     setNodesMap((prev) => ({
       ...prev,
       [activeProjectId]: (prev[activeProjectId] ?? []).map((n) =>
@@ -427,11 +600,13 @@ export function AppShell() {
       ),
     }));
     const dbUpdates: Record<string, string | null> = {};
-    if (updates.title      !== undefined) dbUpdates.title      = updates.title!;
-    if (updates.role       !== undefined) dbUpdates.role       = updates.role!;
-    if (updates.icon       !== undefined) dbUpdates.icon       = updates.icon!;
-    if (updates.subtitle   !== undefined) dbUpdates.subtitle   = updates.subtitle!;
-    if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
+    if (updates.title         !== undefined) dbUpdates.title          = updates.title!;
+    if (updates.role          !== undefined) dbUpdates.role           = updates.role!;
+    if (updates.icon          !== undefined) dbUpdates.icon           = updates.icon!;
+    if (updates.subtitle      !== undefined) dbUpdates.subtitle       = updates.subtitle!;
+    if (updates.assignedTo    !== undefined) dbUpdates.assigned_to    = updates.assignedTo;
+    if (updates.ownerInitials !== undefined) dbUpdates.owner_initials = updates.ownerInitials;
+    if (updates.ownerColor    !== undefined) dbUpdates.owner_color    = updates.ownerColor;
     if (Object.keys(dbUpdates).length) {
       supabase.from("funnel_nodes").update(dbUpdates).eq("id", nodeId).then(() => {});
     }

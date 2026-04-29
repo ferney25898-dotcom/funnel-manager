@@ -55,7 +55,15 @@ export interface FunnelNodeData {
   onMarkRead?:       () => void;
   onSendMessage?:    (text: string) => void;
   onAddTask?:        (text: string) => void;
-  onUpdateNodeData?: (updates: { title?: string; subtitle?: string; icon?: string; role?: string; assignedTo?: string | null }) => void;
+  onUpdateNodeData?: (updates: {
+    title?:          string;
+    subtitle?:       string;
+    icon?:           string;
+    role?:           string;
+    assignedTo?:     string | null;
+    ownerInitials?:  string;
+    ownerColor?:     string;
+  }) => void;
   onUploadFile?:     (file: File) => Promise<void>;
   members?:          ProjectMember[];
 }

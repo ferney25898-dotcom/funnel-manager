@@ -41,12 +41,16 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
   const [showRoles,    setShowRoles]    = useState(false);
   const [showAssign,   setShowAssign]   = useState(false);
 
-  const chatRef    = useRef<HTMLDivElement>(null);
-  const titleRef   = useRef<HTMLInputElement>(null);
-  const taskRef    = useRef<HTMLInputElement>(null);
-  const fileRef    = useRef<HTMLInputElement>(null);
+  const chatRef      = useRef<HTMLDivElement>(null);
+  const titleRef     = useRef<HTMLInputElement>(null);
+  const taskRef      = useRef<HTMLInputElement>(null);
+  const fileRef      = useRef<HTMLInputElement>(null);
+  const roleDropRef  = useRef<HTMLDivElement>(null);
+  const assignDropRef= useRef<HTMLDivElement>(null);
 
   const roleColor = getRoleColor(data.role);
+  const assignee  = data.members?.find((m) => m.id === data.assignedTo);
+  const barColor  = assignee?.color ?? data.ownerColor ?? roleColor;
   const tasks     = data.tasks;
   const messages  = data.messages;
   const done      = tasks.filter((t) => t.done).length;
@@ -72,6 +76,30 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
 
   /* sync title when data changes externally */
   useEffect(() => { setTitleInput(data.title); }, [data.title]);
+
+  /* click-outside: close role picker */
+  useEffect(() => {
+    if (!showRoles) return;
+    const handler = (e: MouseEvent) => {
+      if (roleDropRef.current && !roleDropRef.current.contains(e.target as Node)) {
+        setShowRoles(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showRoles]);
+
+  /* click-outside: close assign picker */
+  useEffect(() => {
+    if (!showAssign) return;
+    const handler = (e: MouseEvent) => {
+      if (assignDropRef.current && !assignDropRef.current.contains(e.target as Node)) {
+        setShowAssign(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAssign]);
 
   const saveTitle = () => {
     setEditingTitle(false);
@@ -124,9 +152,9 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
       style={{
         width: 200,
         background: "var(--surface)",
-        border: `1.5px solid ${selected ? roleColor : "var(--border)"}`,
+        border: `1.5px solid ${selected ? barColor : "var(--border)"}`,
         borderRadius: "var(--radius-node)",
-        boxShadow: selected ? `0 0 0 2px ${roleColor}33` : "0 1px 6px rgba(0,0,0,0.08)",
+        boxShadow: selected ? `0 0 0 2px ${barColor}33` : "0 1px 6px rgba(0,0,0,0.08)",
         fontFamily: "var(--font-sans)",
         transition: "box-shadow 0.15s, border-color 0.15s",
         overflow: "visible",
@@ -139,8 +167,8 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
       <Handle type="target"  position={Position.Top}    style={handleStyle} id="top-in" />
       <Handle type="source"  position={Position.Bottom} style={handleStyle} id="bottom-out" />
 
-      {/* ── Role color strip ── */}
-      <div style={{ height: 3, background: roleColor, borderRadius: "10px 10px 0 0" }} />
+      {/* ── Owner/role color strip ── */}
+      <div style={{ height: 3, background: barColor, borderRadius: "10px 10px 0 0" }} />
 
       {/* ── Header ── */}
       <div
@@ -218,6 +246,7 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
       {/* ── Role picker dropdown ── */}
       {showRoles && (
         <div
+          ref={roleDropRef}
           onClick={(e) => e.stopPropagation()}
           style={{ position: "absolute", top: 44, left: 8, zIndex: 999,
             background: "var(--surface)", border: "1px solid var(--border)",
@@ -246,7 +275,7 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
       {/* ── Progress bar + assignee ── */}
       <div style={{ padding: "0 10px 8px", position: "relative" }}>
         <div style={{ height: 3, background: "var(--border)", borderRadius: 999, overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: roleColor,
+          <div style={{ width: `${pct}%`, height: "100%", background: barColor,
             borderRadius: 999, transition: "width 0.3s ease" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center",
@@ -254,30 +283,22 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
           <span style={{ fontSize: 10, color: "var(--text2)" }}>
             {done}/{total} tareas · {pct}%
           </span>
-          {(() => {
-            const assignee = data.members?.find((m) => m.id === data.assignedTo);
-            const initials = assignee ? getInitials(assignee.full_name || assignee.email) : (data.ownerInitials || "—");
-            const color    = assignee?.color || data.ownerColor || "var(--border2)";
-            const label    = assignee ? assignee.full_name : "Sin asignar";
-            return (
-              <span
-                title={`Responsable: ${label} · clic para cambiar`}
-                onClick={(e) => { e.stopPropagation(); setShowAssign((s) => !s); }}
-                style={{
-                  cursor: "pointer", width: 20, height: 20, borderRadius: "50%",
-                  background: assignee ? color : "transparent",
-                  border: assignee ? "none" : `1.5px dashed var(--border2)`,
-                  color: "#fff", fontSize: 8.5, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }}>
-                {assignee ? initials : "?"}
-              </span>
-            );
-          })()}
+          <span
+            title={`Responsable: ${assignee ? (assignee.full_name || assignee.email) : "Sin asignar"} · clic para cambiar`}
+            onClick={(e) => { e.stopPropagation(); setShowAssign((s) => !s); }}
+            style={{
+              cursor: "pointer", width: 20, height: 20, borderRadius: "50%",
+              background: assignee ? barColor : "transparent",
+              border: assignee ? "none" : `1.5px dashed var(--border2)`,
+              color: "#fff", fontSize: 8.5, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+            {assignee ? getInitials(assignee.full_name || assignee.email) : (data.ownerInitials || "?")}
+          </span>
         </div>
 
         {showAssign && (
-          <div onClick={(e) => e.stopPropagation()}
+          <div ref={assignDropRef} onClick={(e) => e.stopPropagation()}
             style={{ position: "absolute", top: 32, right: 10, zIndex: 999,
               background: "var(--surface)", border: "1px solid var(--border)",
               borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
@@ -286,7 +307,10 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
               textTransform: "uppercase", letterSpacing: "0.07em",
               padding: "6px 12px 4px" }}>Asignar a</div>
             <button
-              onClick={() => { setShowAssign(false); data.onUpdateNodeData?.({ assignedTo: null }); }}
+              onClick={() => {
+                setShowAssign(false);
+                data.onUpdateNodeData?.({ assignedTo: null, ownerInitials: "", ownerColor: "" });
+              }}
               style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
                 padding: "6px 12px", fontSize: 12, color: "var(--text2)",
                 background: !data.assignedTo ? "var(--surface2)" : "none",
@@ -297,7 +321,14 @@ export function FunnelNode({ data, selected }: NodeProps<FunnelNodeData>) {
             </button>
             {(data.members ?? []).map((m) => (
               <button key={m.id}
-                onClick={() => { setShowAssign(false); data.onUpdateNodeData?.({ assignedTo: m.id }); }}
+                onClick={() => {
+                  setShowAssign(false);
+                  data.onUpdateNodeData?.({
+                    assignedTo:    m.id,
+                    ownerInitials: getInitials(m.full_name || m.email),
+                    ownerColor:    m.color,
+                  });
+                }}
                 style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
                   padding: "6px 12px", fontSize: 12, color: "var(--text)",
                   background: data.assignedTo === m.id ? "var(--surface2)" : "none",
