@@ -86,7 +86,8 @@ export function TeamModal({ projectId, onClose }: TeamModalProps) {
     setLoading(false);
   }
 
-  useEffect(() => { loadData(); /* eslint-disable-next-line */ }, [projectId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadData(); }, [projectId]);
 
   const isOwner = currentUid === ownerUid;
 
